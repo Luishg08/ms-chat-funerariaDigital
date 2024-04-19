@@ -1,0 +1,82 @@
+<!--Create an html with two sections-->
+<!-- one for public messages and one for private messages->
+a form to send a public message-->
+
+<!DOCTYPE html>
+
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+</head>
+<body>
+    <h1>Chat Room</h1>
+    <section>
+        <h2>Public Chat</h2>
+        <ul id="messages"></ul>
+        <form id="publicMessageForm">
+            <input id="messageInput" type="text" autocomplete="off" />
+            <button>Send Public Message</button>
+        </form>
+    </section>
+    <section>
+        <h2>Private Chat</h2>
+        <ul id="privateMessages"></ul>
+        <form id="privateMessageForm">
+            <input id="recipientInput" placeholder="Recipient's username" />
+            <input id="privateMessageInput" type="text" autocomplete="off" />
+            <button>Send Private Message</button>
+        </form>
+    </section>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        const socket = io("http://localhost:3010");
+
+        const username = prompt("Enter your username:");
+        if (username) {
+            socket.emit("join", username);
+        }
+
+        const publicMessageForm = document.getElementById("publicMessageForm");
+        const messageInput = document.getElementById("messageInput");
+        publicMessageForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const message = messageInput.value.trim();
+            if (message !== "") {
+                socket.emit("message", message);
+                messageInput.value = "";
+            }
+        });
+
+        const privateMessageForm = document.getElementById("privateMessageForm");
+        const recipientInput = document.getElementById("recipientInput");
+        const privateMessageInput = document.getElementById("privateMessageInput");
+        privateMessageForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const recipient = recipientInput.value.trim();
+            const message = privateMessageInput.value.trim();
+            if (recipient && message) {
+                socket.emit("privateMessage", { recipient, message });
+                displayPrivateMessage({ user: "You", recipient, message });
+                privateMessageInput.value = "";
+            }
+        });
+
+        socket.on("message", (data) => {
+            displayMessage(data);
+        });
+
+        socket.on("privateMessage", (data) => {
+            displayPrivateMessage(data);
+        });
+
+        function displayMessage(data) {
+            const messages = document.getElementById("messages");
+            const li = document.createElement("li");
+            li.textContent = `${data.user}: ${data.message
+            }
+            `;}
