@@ -2,6 +2,24 @@ const express = require("express");
 const http = require("http");
 const socketIo = require("socket.io");
 const cors = require('cors');
+const mongoose = require('mongoose');
+mongoose.set('strictQuery', true);
+//do the conection with the database
+mongoose.connect('mongodb+srv://adminChat:admin12345@serviciochat.wmgtprq.mongodb.net/?w=majority')
+.then(() => console.log('Conexión a MongoDB exitosa'))
+.catch(err => console.error('Error de conexión a MongoDB:', err));
+
+//crear modelo de mensaje
+const mensajeSchema = new mongoose.Schema({
+    id_mensaje: String,
+    nombre: String,
+    fecha: Date,
+    hora: String,
+    contenido: String
+  });
+  
+const Mensaje = mongoose.model('Mensaje', mensajeSchema);
+  
 
 // instanciar express
 const app = express();
@@ -47,8 +65,19 @@ io.on("connection", (socket) => {
 
     socket.on("message", (message) => {
         const user = users[socket.id] || "User";
+        const mensaje = new Mensaje({
+          id_mensaje: socket.id,
+          nombre: user,
+          fecha: new Date(),
+          hora: new Date().toLocaleTimeString(),
+          contenido: message
+        });
+        mensaje.save(err => {
+          if (err) return console.error(err);
+          console.log('Mensaje guardado exitosamente en la base de datos');
+        });
         io.emit("message", { user, message });
-    });
+      });
 
     socket.on("privateMessage", (data) => {
         const user = users[socket.id] || "User";
