@@ -1,6 +1,55 @@
 <html>
   <head>
     <title>Socket.io Chat</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      h2 {
+        color: #007BFF;
+        text-align: center;
+        margin-top: 50px;
+      }
+      ul {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        background-color: #ddd;
+      }
+      li {
+        padding: 10px;
+        border-bottom: 1px solid #bbb;
+        background-color: #f9f9f9;
+      }
+      input[type="text"] {
+        width: 70%;
+        padding: 12px 20px;
+        margin: 8px 0;
+        box-sizing: border-box;
+        border: 2px solid #007BFF;
+        border-radius: 4px;
+      }
+      button {
+        background-color: #007BFF;
+        color: white;
+        padding: 14px 20px;
+        margin: 8px 0;
+        border: none;
+        cursor: pointer;
+        width: 20%;
+        border-radius: 4px;
+      }
+      button:hover {
+        background-color: #007BFF;
+      }
+    </style>
   </head>
   <body>
     <h2>Chat Room of <label id="usernameChat"></label></h2>
@@ -39,6 +88,24 @@
         if (message !== "") {
           socket.emit("message", message);
           messageInput.value = "";
+          //necesito una nueva instancia en la base de datos mongoDb con los atributos del mensaje
+          // Create a new instance in the MongoDB database with the attributes of the message
+          // Assuming you have a MongoDB connection and a collection called "messages"
+          const messageData = {
+            user: username,
+            message: message
+          };
+
+          // Assuming you have a MongoDB connection and a collection called "messages"
+          // Insert the message data into the MongoDB collection
+          db.collection("messages").insertOne(messageData, (error, result) => {
+            if (error) {
+              console.error("Error inserting message into MongoDB:", error);
+            } else {
+              console.log("Message inserted into MongoDB:", result);
+            }
+          });
+
         }
       }
 
