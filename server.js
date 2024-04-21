@@ -138,21 +138,62 @@ io.use((socket, next) => {
       io.emit("message", { user, message: data.message });
     });
   
-    // Manejar los mensajes privados
-    socket.on("privateMessage", (data) => {
-      const user = users[socket.id] || "User";
-      const recipientSocket = Object.keys(users).find(
-        (socketId) => users[socketId] === data.recipient
-      );
-      if (recipientSocket) {
-        io.to(recipientSocket).emit("privateMessage", {
-          user,
-          recipient: data.recipient,
-          message: data.message,
-        });
-      }
-    });
+   // Manejar los mensajes privados
+   socket.on("privateMessage", (data) => {
+    const user = users[socket.id] || "User";
+    const senderName = user;
   
+    // Verificar si el remitente está en la misma salaChat
+    Persona.findOne({ nombre: senderName, codigoSala: data.salaCode }, (err, sender) => {
+      if (err || !sender) {
+        console.error("Sender not found or not in the same room:", senderName);
+        return;
+      }
+  
+      // Verificar si el destinatario está en la misma salaChat
+      Persona.findOne({ nombre: data.recipient, codigoSala: data.salaCode }, (err, recipient) => {
+        if (err || !recipient) {
+          console.error("Recipient not found or not in the same room:", data.recipient);
+          return;
+        }
+  
+        const recipientSocket = Object.keys(users).find(
+          (socketId) => users[socketId] === data.recipient
+        );
+  
+        // Si el remitente y el destinatario están en la misma sala, enviar el mensaje privado
+        if (recipientSocket) {
+          io.to(recipientSocket).emit("privateMessage", {
+            user: senderName,
+            recipient: data.recipient,
+            message: data.message,
+          });
+        } else {
+          console.log("Recipient not found:", data.recipient);
+        }
+      });
+    });
+  });
+  
+      // Manejar eventos del servidor
+socket.on("message", (data) => {
+    console.log("Message received:", data.message);
+    const user = users[socket.id] || "User";
+    const mensaje = new Mensaje({
+      id_mensaje: socket.id,
+      nombre: user,
+      fecha: new Date(),
+      hora: new Date().toLocaleTimeString(),
+      contenido: data.message,
+      salaChat: data.salaCode // Usar el código de la sala recibido del cliente
+    });
+    mensaje.save(err => {
+      if (err) return console.error(err);
+      console.log('Mensaje guardado exitosamente en la base de datos');
+    });
+    io.emit("message", { user, message: data.message });
+  });
+
     // Manejar la desconexión de los usuarios
     socket.on("disconnect", () => {
       console.log(`The user ${users[socket.id]} has left the chat.`);

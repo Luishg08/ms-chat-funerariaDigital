@@ -7,6 +7,17 @@
   </style>
 </head>
 <body>
+
+<!-- Input para ingresar el destinatario del mensaje privado -->
+<input id="recipientInput" placeholder="Recipient's username" />
+
+<!-- Input para el mensaje privado -->
+<input id="privateMessageInput" autocomplete="off" type="text" />
+
+<!-- Botón para enviar el mensaje privado -->
+<button onclick="sendPrivateMessage()">Send Private Message</button>
+
+
   <!-- Formulario para ingresar el código de la sala -->
   <div id="roomCodeForm">
     <h2>Enter Room Code:</h2>
@@ -103,18 +114,23 @@
 }
 
     // Función para enviar un mensaje privado
-    function sendPrivateMessage() {
-      const recipientInput = document.getElementById("recipientInput");
-      const privateMessageInput = document.getElementById("privateMessageInput");
-      const recipient = recipientInput.value.trim();
-      const message = privateMessageInput.value.trim();
-      if (recipient && message) {
-        // Enviar el mensaje privado al servidor
-        socket.emit("privateMessage", { recipient, message });
-        displayPrivateMessage({ user: "You", recipient, message });
-        privateMessageInput.value = "";
-      }
-    }
+    // Función para enviar un mensaje privado
+function sendPrivateMessage() {
+  const recipientInput = document.getElementById("recipientInput");
+  const privateMessageInput = document.getElementById("privateMessageInput");
+  const recipient = recipientInput.value.trim();
+  const message = privateMessageInput.value.trim();
+  const salaCode = document.getElementById("roomCodeInput").value.trim(); // Obtener el código de la sala
+  if (recipient && message && salaCode) {
+    // Enviar el mensaje privado al servidor
+    socket.emit("privateMessage", { recipient, message, salaCode });
+    displayPrivateMessage({ user: "You", recipient, message });
+    privateMessageInput.value = "";
+  } else {
+    alert("Please enter recipient, message, and room code.");
+  }
+}
+
 
     // Función para mostrar un mensaje en el chat general
     function displayMessage(data) {
