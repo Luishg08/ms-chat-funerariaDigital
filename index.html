@@ -1,141 +1,146 @@
+<!DOCTYPE html>
 <html>
-  <head>
-    <title>Socket.io Chat</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 0;
-        background-color: #f4f4f4;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-      }
-      h2 {
-        color: #007BFF;
-        text-align: center;
-        margin-top: 50px;
-      }
-      ul {
-        list-style-type: none;
-        margin: 0;
-        padding: 0;
-        background-color: #ddd;
-      }
-      li {
-        padding: 10px;
-        border-bottom: 1px solid #bbb;
-        background-color: #f9f9f9;
-      }
-      input[type="text"] {
-        width: 70%;
-        padding: 12px 20px;
-        margin: 8px 0;
-        box-sizing: border-box;
-        border: 2px solid #007BFF;
-        border-radius: 4px;
-      }
-      button {
-        background-color: #007BFF;
-        color: white;
-        padding: 14px 20px;
-        margin: 8px 0;
-        border: none;
-        cursor: pointer;
-        width: 20%;
-        border-radius: 4px;
-      }
-      button:hover {
-        background-color: #007BFF;
-      }
-    </style>
-  </head>
-  <body>
-    <h2>Chat Room of <label id="usernameChat"></label></h2>
+<head>
+  <title>Socket.io Chat</title>
+  <style>
+    /* Estilos CSS */
+  </style>
+</head>
+<body>
+  <!-- Formulario para ingresar el código de la sala -->
+  <div id="roomCodeForm">
+    <h2>Enter Room Code:</h2>
+    <input id="roomCodeInput" type="text" placeholder="Room Code" autocomplete="off" />
+    <button onclick="joinChat()">Join Chat</button>
+  </div>
+
+  <div id="usernameFormContainer">
+    <h2>Enter your username:</h2>
+    <input id="usernameInput" type="text" placeholder="Your username" autocomplete="off" />
+    <button onclick="setUsername()">Set Username</button>
+  </div>
+
+
+  <!-- Contenedor del chat -->
+  <div id="chatContainer" style="display: none;">
+    <h2>Chat Room of <span id="usernameChat"></span></h2>
     <ul id="messages"></ul>
     <input id="messageInput" type="text" autocomplete="off" />
     <button onclick="sendMessage()">Send General Message</button>
-    <br />
-    <br />
+    <br /><br />
     <h2>Private Chat</h2>
     <input id="recipientInput" placeholder="Recipient's username" />
     <input id="privateMessageInput" autocomplete="off" type="text" />
     <button onclick="sendPrivateMessage()">Send Private Message</button>
     <ul id="privateMessages"></ul>
-    
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script>
-      const socket = io("http://localhost:3010");
+  </div>
 
-      const username = prompt("Enter your username:");
-      document.querySelector("#usernameChat").innerHTML = username;
-      if (username) {
-        socket.emit("join", username);
+  <!-- Formulario para ingresar el nombre de usuario -->
+  <div id="usernameForm" style="display: none;">
+    <h2>Enter your username:</h2>
+    <input id="usernameInput" type="text" placeholder="Your username" autocomplete="off" />
+    <button onclick="setUsername()">Set Username</button>
+  </div>
+
+  <!-- Importar la biblioteca de Socket.IO -->
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script>
+    // Declarar la instancia del socket
+    const socket = io("http://localhost:3010");
+
+    // Función para unirse al chat
+    function joinChat() {
+      const roomCodeInput = document.getElementById("roomCodeInput");
+      const roomCode = roomCodeInput.value.trim();
+      if (roomCode !== "") {
+        // Establecer el código de sala en el socket y conectar
+        socket.io.opts.query = { codigoSala: roomCode };
+        socket.connect();
+        roomCodeInput.disabled = true; // Deshabilitar el campo después de unirse
+        socket.on("invalidRoomCode", () => {
+        });
+      } else {
+        alert("Please enter a room code.");
       }
+    }
 
-      socket.on("message", (data) => {
-        displayMessage(data);
-      });
+    // Función para establecer el nombre de usuario
+    function setUsername() {
+      const usernameInput = document.getElementById("usernameInput");
+      const username = usernameInput.value.trim();
+      if (username !== "") {
+        document.querySelector("#usernameChat").innerHTML = username;
+        document.getElementById("usernameInput").disabled = true;
 
-      socket.on("privateMessage", (data) => {
-        displayPrivateMessage(data);
-      });
+        // Obtener el código de sala ingresado por el usuario
+        const roomCodeInput = document.getElementById("roomCodeInput");
+        const roomCode = roomCodeInput.value.trim();
 
-      function sendMessage() {
-        const messageInput = document.getElementById("messageInput");
-        const message = messageInput.value.trim();
-        if (message !== "") {
-          socket.emit("message", message);
-          messageInput.value = "";
-          //necesito una nueva instancia en la base de datos mongoDb con los atributos del mensaje
-          // Create a new instance in the MongoDB database with the attributes of the message
-          // Assuming you have a MongoDB connection and a collection called "messages"
-          const messageData = {
-            user: username,
-            message: message
-          };
+        // Enviar el nombre de usuario y el código de sala al servidor
+        socket.emit("join", username, roomCode);
 
-          // Assuming you have a MongoDB connection and a collection called "messages"
-          // Insert the message data into the MongoDB collection
-          db.collection("messages").insertOne(messageData, (error, result) => {
-            if (error) {
-              console.error("Error inserting message into MongoDB:", error);
-            } else {
-              console.log("Message inserted into MongoDB:", result);
-            }
-          });
+        // Mostrar el contenedor de chat después de establecer el nombre de usuario
+        document.getElementById("chatContainer").style.display = "block";
+        //recibir el invalid room code
 
-        }
+      } else {
+        alert("Please enter a username.");
       }
+    }
 
-      function sendPrivateMessage() {
-        const recipientInput = document.getElementById("recipientInput");
-        const privateMessageInput = document.getElementById(
-          "privateMessageInput"
-        );
-        const recipient = recipientInput.value.trim();
-        const message = privateMessageInput.value.trim();
-        if (recipient && message) {
-          socket.emit("privateMessage", { recipient, message });
-          displayPrivateMessage({ user: "You", recipient, message });
-          privateMessageInput.value = "";
-        }
-      }
+    // Función para enviar un mensaje general
+    function sendMessage() {
+  const messageInput = document.getElementById("messageInput");
+  const message = messageInput.value.trim();
+  const salaCode = document.getElementById("roomCodeInput").value.trim(); // Obtener el código de la sala
+  if (message !== "" && salaCode !== "") {
+    // Enviar el mensaje al servidor junto con el código de la sala
+    socket.emit("message", { message, salaCode });
+    messageInput.value = "";
+  } else {
+    alert("Please enter a message and room code.");
+  }
+}
 
-      function displayMessage(data) {
-        const messages = document.getElementById("messages");
-        const li = document.createElement("li");
-        li.innerHTML = `<strong>${data.user}:</strong> ${data.message}`;
-        messages.appendChild(li);
+    // Función para enviar un mensaje privado
+    function sendPrivateMessage() {
+      const recipientInput = document.getElementById("recipientInput");
+      const privateMessageInput = document.getElementById("privateMessageInput");
+      const recipient = recipientInput.value.trim();
+      const message = privateMessageInput.value.trim();
+      if (recipient && message) {
+        // Enviar el mensaje privado al servidor
+        socket.emit("privateMessage", { recipient, message });
+        displayPrivateMessage({ user: "You", recipient, message });
+        privateMessageInput.value = "";
       }
+    }
 
-      function displayPrivateMessage(data) {
-        const privateMessages = document.getElementById("privateMessages");
-        const li = document.createElement("li");
-        li.innerHTML = `<strong>${data.user} to ${data.recipient}:</strong> ${data.message}`;
-        privateMessages.appendChild(li);
-      }
-    </script>
-  </body>
+    // Función para mostrar un mensaje en el chat general
+    function displayMessage(data) {
+      const messages = document.getElementById("messages");
+      const li = document.createElement("li");
+      li.innerHTML = `<strong>${data.user}:</strong> ${data.message}`;
+      messages.appendChild(li);
+    }
+
+    // Función para mostrar un mensaje en el chat privado
+    function displayPrivateMessage(data) {
+      const privateMessages = document.getElementById("privateMessages");
+      const li = document.createElement("li");
+      li.innerHTML = `<strong>${data.user} to ${data.recipient}:</strong> ${data.message}`;
+      privateMessages.appendChild(li);
+    }
+
+    // Manejar eventos del servidor
+    socket.on("message", (data) => {
+      displayMessage(data);
+    });
+
+    socket.on("privateMessage", (data) => {
+      displayPrivateMessage(data);
+    });
+
+  </script>
+</body>
 </html>
