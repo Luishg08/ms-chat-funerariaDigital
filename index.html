@@ -3,7 +3,67 @@
 <head>
   <title>Socket.io Chat</title>
   <style>
-    /* Estilos CSS */
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f7f7f7;
+      margin: 0;
+      padding: 0;
+    }
+
+    h2 {
+      margin-top: 20px;
+    }
+
+    #roomCodeForm, #usernameFormContainer, #chatContainer, #usernameForm {
+      width: 400px;
+      margin: 20px auto;
+      background-color: #fff;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    input[type="text"], button {
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      background-color: #4caf50;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    #messages, #privateMessages {
+      list-style-type: none;
+      padding: 0;
+    }
+
+    #messages li, #privateMessages li {
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 4px;
+      background-color: #f2f2f2;
+    }
+
+    #messages li strong, #privateMessages li strong {
+      color: #4caf50;
+    }
+
+    #privateMessages li {
+      background-color: #d9edf7;
+    }
+
+    #chatContainer h2 {
+      color: #4caf50;
+    }
   </style>
 </head>
 <body>
@@ -134,11 +194,14 @@ function sendPrivateMessage() {
 
     // Función para mostrar un mensaje en el chat general
     function displayMessage(data) {
-      const messages = document.getElementById("messages");
-      const li = document.createElement("li");
-      li.innerHTML = `<strong>${data.user}:</strong> ${data.message}`;
-      messages.appendChild(li);
-    }
+  const messages = document.getElementById("messages");
+  const messageExists = Array.from(messages.children).some(child => child.textContent === `${data.user}: ${data.message}`);
+  if (!messageExists) {
+    const li = document.createElement("li");
+    li.innerHTML = `<strong>${data.user}:</strong> ${data.message}`;
+    messages.appendChild(li);
+  }
+}
 
     // Función para mostrar un mensaje en el chat privado
     function displayPrivateMessage(data) {
