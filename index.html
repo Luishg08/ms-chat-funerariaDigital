@@ -68,24 +68,17 @@
 </head>
 <body>
 
-<!-- Input para ingresar el destinatario del mensaje privado -->
-<input id="recipientInput" placeholder="Recipient's username" />
-
-<!-- Input para el mensaje privado -->
-<input id="privateMessageInput" autocomplete="off" type="text" />
-
-<!-- Botón para enviar el mensaje privado -->
-<button onclick="sendPrivateMessage()">Send Private Message</button>
+<!-- Formulario para ingresar el nombre de usuario -->
 
 
   <!-- Formulario para ingresar el código de la sala -->
   <div id="roomCodeForm">
     <h2>Enter Room Code:</h2>
     <input id="roomCodeInput" type="text" placeholder="Room Code" autocomplete="off" />
-    <button onclick="joinChat()">Join Chat</button>
+    <button id = "roomCodeButton" onclick="joinChat()">Join Chat</button>
   </div>
 
-  <div id="usernameFormContainer">
+  <div id="usernameFormContainer" style="display: none;">
     <h2>Enter your username:</h2>
     <input id="usernameInput" type="text" placeholder="Your username" autocomplete="off" />
     <button onclick="setUsername()">Set Username</button>
@@ -106,12 +99,7 @@
     <ul id="privateMessages"></ul>
   </div>
 
-  <!-- Formulario para ingresar el nombre de usuario -->
-  <div id="usernameForm" style="display: none;">
-    <h2>Enter your username:</h2>
-    <input id="usernameInput" type="text" placeholder="Your username" autocomplete="off" />
-    <button onclick="setUsername()">Set Username</button>
-  </div>
+
 
   <!-- Importar la biblioteca de Socket.IO -->
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -119,22 +107,76 @@
     // Declarar la instancia del socket
     const socket = io("http://localhost:3010");
 
-    // Función para unirse al chat
-    function joinChat() {
-      const roomCodeInput = document.getElementById("roomCodeInput");
-      const roomCode = roomCodeInput.value.trim();
-      if (roomCode !== "") {
-        // Establecer el código de sala en el socket y conectar
-        socket.io.opts.query = { codigoSala: roomCode };
-        socket.connect();
-        roomCodeInput.disabled = true; // Deshabilitar el campo después de unirse
-        socket.on("invalidRoomCode", () => {
-        });
-      } else {
-        alert("Please enter a room code.");
+    document.addEventListener("DOMContentLoaded", function() {
+      if(localStorage.getItem("roomCode") && localStorage.getItem("socketId")){
+        socket.io.opts.query = { codigoSala: localStorage.getItem("roomCode") };
+        socket.connect()
+        socket.emit("connectedwhithlocalstorage", localStorage.getItem("roomCode"))
+        document.getElementById("chatContainer").style.display = "block";
+        document.getElementById("usernameFormContainer").style.display = "none";
+        document.getElementById("roomCodeForm").style.display = "none";
+        document.getElementById("usernameChat").innerHTML = localStorage.getItem("username");
       }
-    }
+    });
+    
+  socket.on("CodigoInvalido", () => {
+      alert("Código de sala inválido. Por favor, ingrese un código de sala válido");
+      roomCodeInput.disabled = false;
+      document.getElementById("chatContainer").style.display = "none";
+      document.getElementById("usernameFormContainer").style.display = "none";
+      document.getElementById("usernameInput").disabled = false;
+  });
 
+  socket.on("recipientNotFound", () => {
+      alert("El destinatario no se encontró en la sala. Por favor, ingrese un destinatario válido");
+  });
+
+  socket.on("roomClosed", () => {
+      alert("La sala está cerrada. Por favor, ingresar un código de sala válido");
+      roomCodeInput.disabled = false;
+      document.getElementById("chatContainer").style.display = "none";
+      document.getElementById("usernameFormContainer").style.display = "none";
+      document.getElementById("usernameInput").disabled = false;
+  });
+  
+    // Función para unirse al chat
+  function joinChat() {
+    document.getElementById("usernameFormContainer").style.display = "block";
+  const roomCodeInput = document.getElementById("roomCodeInput");
+  const roomCodeButton = document.getElementById("roomCodeButton");
+  console.log(roomCodeInput.value.trim())
+  const roomCode = roomCodeInput.value.trim();
+  if (roomCode !== "") {
+    // Establecer el código de sala en el socket y conectar
+    socket.io.opts.query = { codigoSala: roomCode };
+    socket.connect()
+    
+    // Deshabilitar el campo después de unirse
+  } else {
+    alert("Por favor ingrese un código de sala");
+  }
+}
+
+socket.on("noPermission", () => {
+          alert("El usuario no tiene permitido enviar mensajes");
+        });
+
+
+socket.on("connected", () => {
+          alert("Conectado a la sala de chat");
+          document.getElementById("roomCodeForm").style.display = "none";
+          document.getElementById("usernameFormContainer").style.display = "none";
+          localStorage.setItem("roomCode", roomCodeInput.value.trim());
+          localStorage.setItem("username", usernameInput.value.trim());
+          localStorage.setItem('socketId', socket.id);
+        });
+
+socket.on("userExists", () => {
+          alert("Username already exists. Please enter a different username.");
+          document.getElementById("usernameInput").disabled = false;
+          document.getElementById("chatContainer").style.display = "none";
+          document.getElementById("roomCodeForm").style.display = "block";
+        });
     // Función para establecer el nombre de usuario
     function setUsername() {
       const usernameInput = document.getElementById("usernameInput");
@@ -146,13 +188,14 @@
         // Obtener el código de sala ingresado por el usuario
         const roomCodeInput = document.getElementById("roomCodeInput");
         const roomCode = roomCodeInput.value.trim();
+        document.getElementById("chatContainer").style.display = "block";
 
         // Enviar el nombre de usuario y el código de sala al servidor
         socket.emit("join", username, roomCode);
 
         // Mostrar el contenedor de chat después de establecer el nombre de usuario
-        document.getElementById("chatContainer").style.display = "block";
-        //recibir el invalid room code
+        let mostrar = true
+
 
       } else {
         alert("Please enter a username.");
@@ -163,10 +206,11 @@
     function sendMessage() {
   const messageInput = document.getElementById("messageInput");
   const message = messageInput.value.trim();
-  const salaCode = document.getElementById("roomCodeInput").value.trim(); // Obtener el código de la sala
+  const salaCode = localStorage.getItem("roomCode"); // Obtener el código de la sala
+  const username = localStorage.getItem("username");
   if (message !== "" && salaCode !== "") {
     // Enviar el mensaje al servidor junto con el código de la sala
-    socket.emit("message", { message, salaCode });
+    socket.emit("message", { message, salaCode, username  });
     messageInput.value = "";
   } else {
     alert("Please enter a message and room code.");
@@ -194,13 +238,10 @@ function sendPrivateMessage() {
 
     // Función para mostrar un mensaje en el chat general
     function displayMessage(data) {
-  const messages = document.getElementById("messages");
-  const messageExists = Array.from(messages.children).some(child => child.textContent === `${data.user}: ${data.message}`);
-  if (!messageExists) {
+    const messages = document.getElementById("messages");
     const li = document.createElement("li");
-    li.innerHTML = `<strong>${data.user}:</strong> ${data.message}`;
+    li.innerHTML = `<strong>${data.user}:</strong> ${data.message}<br><span style="color: gray;">${data.date}${data.time}</span>`;
     messages.appendChild(li);
-  }
 }
 
     // Función para mostrar un mensaje en el chat privado
@@ -217,6 +258,7 @@ function sendPrivateMessage() {
     });
 
     socket.on("privateMessage", (data) => {
+      console.log("Mensaje privado recibido:", data); // Agregamos esta línea para imprimir los datos recibidos en la consola
       displayPrivateMessage(data);
     });
 

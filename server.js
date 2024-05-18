@@ -10,7 +10,9 @@ mongoose.connect('mongodb+srv://adminChat:admin12345@serviciochat.wmgtprq.mongod
 
 // Definición del modelo de la sala de chat
 const SalaChat = mongoose.model('SalaChat', {
-  codigoSalaChat: String
+  codigoSalaChat: String,
+  cliente: String,
+  estadoSalaChat: Boolean
 });
 
 // Definición del modelo del mensaje
@@ -53,8 +55,12 @@ let users = {};
 
 // Verificar el código de la sala antes de permitir que el usuario se una al chat
 io.use((socket, next) => {
+    // save the socketID in the local storage
+    
+    console.log(socket.handshake.query.socketId);
+    return next();
     const codigoSala = socket.handshake.query.codigoSala;
-  
+
     SalaChat.findOne({ codigoSalaChat: codigoSala }, (err, sala) => {
       if (err) {
         console.error("Error al buscar la sala en la base de datos:", err);
@@ -65,7 +71,12 @@ io.use((socket, next) => {
         socket.emit("invalidRoomCode");
         return next(new Error("Invalid room code"));
       }
-      return next(); // Continuar con la conexión si el código de la sala es válido
+      if(sala.estadoSalaChat === false) {
+        console.log("La sala está cerrada:", codigoSala);
+        socket.emit("roomClosed");
+        //como recibo el 
+        return next(new Error("Room closed"));
+      } // Continuar con la conexión si el código de la sala es válido
     });
   });
   
@@ -75,21 +86,30 @@ io.use((socket, next) => {
   
     // Permitir que el usuario se una al chat si el código de sala es válido
     socket.on("join", (username, salaCode) => {
+      //Comprueba si hay un socketId en el local storage
       console.log(`${username} joined the chat with socketId ${socket.id}`);
       users[socket.id] = username;
   
       // Verificar si la sala existe
       SalaChat.findOne({ codigoSalaChat: salaCode }, (err, sala) => {
-        if (err) {
+        if (sala===null) {
           console.error("Error al buscar la sala en la base de datos:", err);
+          socket.emit("CodigoInvalido")
           return;
         }
-        if (!sala) {
-          console.log("Código de sala no se ha encontrado:", salaCode);
-          socket.emit("invalidRoomCode");
+        if(sala.estadoSalaChat === false) {
+          console.log("La sala está cerrada:", salaCode);
+          socket.emit("roomClosed");
           return;
         }
-  
+        Persona.findOne({ nombre: username, codigoSala: salaCode }, (err, persona) => {
+          if (persona) {
+            console.log("Usuario ya existe en la sala:", username);
+            socket.emit("userExists");
+          }
+        })
+
+
         // Crear una nueva instancia de Persona y guardarla en la base de datos
         const persona = new Persona({
           nombre: username,
@@ -116,26 +136,63 @@ io.use((socket, next) => {
             });
           }
         });
+        socket.emit("connected");
       });
     });
   
+    socket.on("connectedwhithlocalstorage", (salaCode) => {
+      Mensaje.find({ salaChat: salaCode }, (err, mensajes) => {
+        if (err) {
+          console.error("Error al buscar mensajes de la sala:", err);
+          return;
+        }
+        // Enviar cada mensaje al usuario recién conectado
+        mensajes.forEach(mensaje => {
+          socket.emit("message", { user: mensaje.nombre, message: mensaje.contenido });
+        });
+      });
+    })
+
+
     // Manejar los mensajes generales
     socket.on("message", (data) => {
+
       console.log("Message received:", data.message);
-      const user = users[socket.id] || "User";
-      const mensaje = new Mensaje({
-        id_mensaje: socket.id,
-        nombre: user,
-        fecha: new Date(),
-        hora: new Date().toLocaleTimeString(),
-        contenido: data.message,
-        salaChat: data.salaCode // Usar el código de la sala recibido del cliente
-      });
-      mensaje.save(err => {
-        if (err) return console.error(err);
-        console.log('Mensaje guardado exitosamente en la base de datos');
-      });
-      io.emit("message", { user, message: data.message });
+      const user = data.username;
+      Persona.findOne({ nombre: user, codigoSala: data.salaCode }, (err, persona) => {
+        if (persona){
+          if(persona.permiso === true){
+            console.log('El usuario tiene permiso para enviar mensajes')
+            const mensaje = new Mensaje({
+              id_mensaje: socket.id,
+              nombre: user,
+              fecha: new Date(),
+              hora: new Date().toLocaleTimeString(),
+              contenido: data.message,
+              salaChat: data.salaCode // Usar el código de la sala recibido del cliente
+            });
+            mensaje.save(err => {
+              if (err) return console.error(err);
+              console.log('Mensaje guardado exitosamente en la base de datos');
+            });
+            Mensaje.find({id_mensaje: socket.id}, (err, mensaje) => {
+              if (err) {
+                console.error("Error al buscar el mensaje en la base de datos:", err);
+                return;
+              }
+              let date = mensaje.fecha;
+              let time = mensaje.hora;
+              // Enviar el mensaje a todos los usuarios en la misma sala
+              io.emit("message", { user, message: data.message, date, time});
+            });
+        } 
+        else{
+          console.log('El usuario no tiene permiso para enviar mensajes')
+          socket.emit("noPermission")
+        }
+      }
+      })
+      
     });
   
    // Manejar los mensajes privados
@@ -154,54 +211,57 @@ io.use((socket, next) => {
       Persona.findOne({ nombre: data.recipient, codigoSala: data.salaCode }, (err, recipient) => {
         if (err || !recipient) {
           console.error("Recipient not found or not in the same room:", data.recipient);
+          socket.emit("recipientNotFound");
           return;
         }
-  
-        const recipientSocket = Object.keys(users).find(
-          (socketId) => users[socketId] === data.recipient
-        );
-  
-        // Si el remitente y el destinatario están en la misma sala, enviar el mensaje privado
-        if (recipientSocket) {
-          io.to(recipientSocket).emit("privateMessage", {
+        // Obtener el socketId de la Persona
+        const socketId = Object.keys(io.sockets.sockets[id].handshake.query.nombre === data.recipient);
+        if (socketId) {
+          // Enviar el mensaje privado al destinatario
+          io.to(socketId).emit("privateMessage", {
             user: senderName,
-            recipient: data.recipient,
+            recipient: socketId,
             message: data.message,
           });
         } else {
-          console.log("Recipient not found:", data.recipient);
+          console.error("SocketId not found for recipient:", data.recipient);
+          socket.emit("recipientNotFound");
         }
       });
     });
   });
   
-      // Manejar eventos del servidor
-socket.on("message", (data) => {
-    console.log("Message received:", data.message);
-    const user = users[socket.id] || "User";
-    const mensaje = new Mensaje({
-      id_mensaje: socket.id,
-      nombre: user,
-      fecha: new Date(),
-      hora: new Date().toLocaleTimeString(),
-      contenido: data.message,
-      salaChat: data.salaCode // Usar el código de la sala recibido del cliente
-    });
-    mensaje.save(err => {
-      if (err) return console.error(err);
-      console.log('Mensaje guardado exitosamente en la base de datos');
-    });
-    io.emit("message", { user, message: data.message });
-  });
 
     // Manejar la desconexión de los usuarios
     socket.on("disconnect", () => {
       console.log(`The user ${users[socket.id]} has left the chat.`);
       delete users[socket.id];
     });
-  });
+    
+  }  
+);
   
   const PORT = process.env.PORT || 3010;
   server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
+
+
+  app.use(express.json());
+
+  app.post('/salas', (req, res) => {
+    const { codigoSalaChat, cliente, estadoSalaChat } = req.body;
+
+    const salaChat = new SalaChat({ codigoSalaChat, cliente, estadoSalaChat});
+
+    salaChat.save((err) => {
+      if (err) {
+        console.error('Error al crear la sala de chat:', err);
+        res.status(500).send('Internal server error');
+      } else {
+        console.log('Sala de chat creada exitosamente');
+        res.status(200).send('Sala de chat creada exitosamente');
+      }
+    });
+  });
+
