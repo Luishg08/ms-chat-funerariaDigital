@@ -68,7 +68,7 @@
 </head>
 <body>
 
-<!-- Formulario para ingresar el nombre de usuario -->
+  <!-- Contenedor de la lista de usuarios -->
 
 
   <!-- Formulario para ingresar el código de la sala -->
@@ -79,15 +79,36 @@
   </div>
 
   <div id="usernameFormContainer" style="display: none;">
-    <h2>Enter your username:</h2>
-    <input id="usernameInput" type="text" placeholder="Your username" autocomplete="off" />
-    <button onclick="setUsername()">Set Username</button>
+    <h2>Enter your username:</h2> <label for="adminCheckbox">Room Administrator</label> <input id="adminCheckbox" type="checkbox" onchange="toggleUsernameInput()" />
+    <input id="documentAdministrator" type="text" placeholder="Document" autocomplete="off" disabled />
+    <label >Username </label> <input id="usernameInput" type="text" placeholder="Your username" autocomplete="off" disabled />
+    <br>
+    <button onclick="setUsername()">Join</button>
   </div>
+
+
+  <script>
+    function toggleUsernameInput() {
+      const adminCheckbox = document.getElementById("adminCheckbox");
+      const usernameInput = document.getElementById("usernameInput");
+      const documentAdministrator = document.getElementById("documentAdministrator");
+      documentAdministrator.disabled = !adminCheckbox.checked;
+      if(adminCheckbox.checked){
+        usernameInput.value = "";
+      }
+      else{
+        documentAdministrator.value = "";
+      }
+      usernameInput.disabled = adminCheckbox.checked;
+    }
+  </script>
+
+
 
 
   <!-- Contenedor del chat -->
   <div id="chatContainer" style="display: none;">
-    <h2>Chat Room of <span id="usernameChat"></span></h2>
+    <h2>Chat Room of <span id="usernameChat"></span> <button id = "botonLogout" style="display: none; background-color: crimson;;" onclick="logout()">Logout</button> </h2>
     <ul id="messages"></ul>
     <input id="messageInput" type="text" autocomplete="off" />
     <button onclick="sendMessage()">Send General Message</button>
@@ -99,6 +120,10 @@
     <ul id="privateMessages"></ul>
   </div>
 
+  
+  <div id="userlistContainer" style="display: none; margin-left: 37vw;">
+    <h2>Users List:</h2>
+  </div>
 
 
   <!-- Importar la biblioteca de Socket.IO -->
@@ -111,7 +136,7 @@
       if(localStorage.getItem("roomCode") && localStorage.getItem("socketId")){
         socket.io.opts.query = { codigoSala: localStorage.getItem("roomCode") };
         socket.connect()
-        socket.emit("connectedwhithlocalstorage", localStorage.getItem("roomCode"))
+        socket.emit("connectedwhithlocalstorage", localStorage.getItem("roomCode"), localStorage.getItem("username"))
         document.getElementById("chatContainer").style.display = "block";
         document.getElementById("usernameFormContainer").style.display = "none";
         document.getElementById("roomCodeForm").style.display = "none";
@@ -150,8 +175,6 @@
     // Establecer el código de sala en el socket y conectar
     socket.io.opts.query = { codigoSala: roomCode };
     socket.connect()
-    
-    // Deshabilitar el campo después de unirse
   } else {
     alert("Por favor ingrese un código de sala");
   }
@@ -171,8 +194,77 @@ socket.on("connected", () => {
           localStorage.setItem('socketId', socket.id);
         });
 
+socket.on("connectedAdministrator", () => {
+          alert("Conectado el administrador a la sala de chat");
+          document.getElementById("roomCodeForm").style.display = "none";
+          document.getElementById("usernameFormContainer").style.display = "none";
+          localStorage.setItem("roomCode", roomCodeInput.value.trim());
+          localStorage.setItem("username", "Administrator");
+          localStorage.setItem('socketId', socket.id);
+          document.getElementById("userlistContainer").style.display = "block";
+          document.getElementById("botonLogout").style.display = "block";
+        });
+
+socket.on("connectedAdministratorWhithLocalStorage", () => {
+          document.getElementById("roomCodeForm").style.display = "none";
+          document.getElementById("usernameFormContainer").style.display = "none";
+          document.getElementById("userlistContainer").style.display = "block";
+          socket.emit("GetUsers", localStorage.getItem("roomCode"));
+          document.getElementById("botonLogout").style.display = "block";
+        });
+
+socket.on("HereAreTheusers", (users) => {
+  const userlistContainer = document.getElementById("userlistContainer");
+  const ul = document.createElement("ul");
+  ul.id = "userlist";
+  ul.style.listStyleType = "none";
+  ul.style.padding = "0";
+  ul.style.margin = "0";
+  ul.style.border = "1px solid #ccc";
+  ul.style.borderRadius = "5px";
+  ul.style.overflow = "auto";
+  ul.style.maxHeight = "200px";
+  ul.style.width = "400px";
+  users.forEach(user => {
+    const li = document.createElement("li");
+    li.id = user; // Set the id of the li element to the username
+    li.innerHTML = `${user} <br> <button onclick="ActivarPermisos('${user}', '${localStorage.getItem("roomCode")}')">Activar Permisos</button> <button onclick="DesactivarPermisos('${user}', '${localStorage.getItem("roomCode")}')" style="background-color: red;">Desactivar Permisos</button> <button onclick="EliminarUsuario('${user}', '${localStorage.getItem("roomCode")}')" style="background-color: orange;">Eliminar</button>`;
+    li.style.padding = "10px";
+    li.style.borderBottom = "1px solid #ccc";
+    ul.appendChild(li);
+  });
+  userlistContainer.appendChild(ul);
+})
+
+socket.on("permisosActivados" ,(username)=>{
+  alert("Permisos activados para el usuario: " + username);
+})
+
+socket.on("permisosDesactivados" ,(username)=>{
+  alert("Permisos desactivados para el usuario: " + username);
+})
+
+
+socket.on("UsuarioEliminado" ,(username)=>{
+  alert("Usuario eliminado: " + username);
+})
+
 socket.on("userExists", () => {
           alert("Username already exists. Please enter a different username.");
+          document.getElementById("usernameInput").disabled = false;
+          document.getElementById("chatContainer").style.display = "none";
+          document.getElementById("roomCodeForm").style.display = "block";
+        });
+
+socket.on("AdminAlreadyExists", () => {
+          alert("Administrator already registered in the room");
+          document.getElementById("usernameInput").disabled = false;
+          document.getElementById("chatContainer").style.display = "none";
+          document.getElementById("roomCodeForm").style.display = "block";
+        });
+
+socket.on("adminNotClient", () => {
+          alert("This document not corresponding to a client of the room. Please enter a valid document.");
           document.getElementById("usernameInput").disabled = false;
           document.getElementById("chatContainer").style.display = "none";
           document.getElementById("roomCodeForm").style.display = "block";
@@ -181,6 +273,8 @@ socket.on("userExists", () => {
     function setUsername() {
       const usernameInput = document.getElementById("usernameInput");
       const username = usernameInput.value.trim();
+      const documentAdministratorInput = document.getElementById("documentAdministrator");
+      const documentAdministrator = documentAdministratorInput.value.trim();
       if (username !== "") {
         document.querySelector("#usernameChat").innerHTML = username;
         document.getElementById("usernameInput").disabled = true;
@@ -197,10 +291,62 @@ socket.on("userExists", () => {
         let mostrar = true
 
 
-      } else {
-        alert("Please enter a username.");
+      } 
+      else if(documentAdministrator !== ""){
+        document.querySelector("#usernameChat").innerHTML = "Administrator";
+        document.getElementById("usernameInput").disabled = true;
+        document.getElementById("documentAdministrator").disabled = true;
+        
+
+        // Obtener el código de sala ingresado por el usuario
+        const roomCodeInput = document.getElementById("roomCodeInput");
+        const roomCode = roomCodeInput.value.trim();
+        document.getElementById("chatContainer").style.display = "block";
+
+        // Enviar el nombre de usuario y el código de sala al servidor
+        socket.emit("joinAdministrator", documentAdministrator, roomCode);
+
+      }
+      
+      else {
+        alert("Please enter a username or Administrator document.");
       }
     }
+
+    function logout(){
+      const confirmDelete = confirm("Are you sure you want to logout?");
+          if (confirmDelete) {
+            socket.emit("EliminarUsuario", "Administrator", localStorage.getItem("roomCode"));
+            localStorage.removeItem("roomCode");
+            localStorage.removeItem("username");
+            localStorage.removeItem("socketId");
+            location.reload();
+          }
+        }
+
+
+      function EliminarUsuario(username, roomCode){
+        const confirmDelete = confirm("Are you sure you want to delete the user?");
+          if (confirmDelete) {
+            socket.emit("EliminarUsuario", username, roomCode);
+            // Remove the user from the userlist
+            const userlist = document.getElementById("userlist");
+            const userToRemove = document.getElementById(username);
+            if (userToRemove) {
+              userlist.removeChild(userToRemove);
+            }
+          }
+      }
+    
+
+    function ActivarPermisos(username, roomCode){
+      socket.emit("ActivarPermisos", username, roomCode);
+    }
+
+    function DesactivarPermisos(username, roomCode){
+      socket.emit("DesactivarPermisos", username, roomCode);
+    }
+
 
     // Función para enviar un mensaje general
     function sendMessage() {
@@ -210,7 +356,7 @@ socket.on("userExists", () => {
   const username = localStorage.getItem("username");
   if (message !== "" && salaCode !== "") {
     // Enviar el mensaje al servidor junto con el código de la sala
-    socket.emit("message", { message, salaCode, username  });
+    socket.emit("message", { message, salaCode, username, date: new Date(), time: new Date()});
     messageInput.value = "";
   } else {
     alert("Please enter a message and room code.");
@@ -235,12 +381,22 @@ function sendPrivateMessage() {
   }
 }
 
+function displayMessagePush(data) {
+    const messages = document.getElementById("messages");
+    const li = document.createElement("li");
+    li.innerHTML = `<strong>${data.user}:</strong> ${data.message}<br><span style="color: gray;">${data.date}  ${data.time}</span>`;
+    messages.appendChild(li);
+}
+
 
     // Función para mostrar un mensaje en el chat general
     function displayMessage(data) {
     const messages = document.getElementById("messages");
+    let date = new Date();
+    let time = new Date().toLocaleTimeString()
+    let dateBonita = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}   ${time}`
     const li = document.createElement("li");
-    li.innerHTML = `<strong>${data.user}:</strong> ${data.message}<br><span style="color: gray;">${data.date}${data.time}</span>`;
+    li.innerHTML = `<strong>${data.user}:</strong> ${data.message}<br><span style="color: gray;">${dateBonita}</span>`;
     messages.appendChild(li);
 }
 
@@ -254,7 +410,12 @@ function sendPrivateMessage() {
 
     // Manejar eventos del servidor
     socket.on("message", (data) => {
+      console.log("Mensaje recibido:", data); // Agregamos esta línea para imprimir los datos recibidos en la consola
       displayMessage(data);
+    });
+    socket.on("messagePush", (data) => {
+      console.log("Mensaje recibido:", data); // Agregamos esta línea para imprimir los datos recibidos en la consola
+      displayMessagePush(data);
     });
 
     socket.on("privateMessage", (data) => {

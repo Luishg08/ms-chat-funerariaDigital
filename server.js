@@ -2,6 +2,9 @@ const express = require("express");
 const http = require("http");
 const socketIo = require("socket.io");
 const mongoose = require('mongoose');
+const moment = require('moment');
+
+
 
 // Conexión a la base de datos MongoDB
 mongoose.connect('mongodb+srv://adminChat:admin12345@serviciochat.wmgtprq.mongodb.net/?w=majority')
@@ -131,7 +134,7 @@ io.use((socket, next) => {
               }
               // Enviar cada mensaje al usuario recién conectado
               mensajes.forEach(mensaje => {
-                socket.emit("message", { user: mensaje.nombre, message: mensaje.contenido });
+                socket.emit("messagePush", { user: mensaje.nombre, message: mensaje.contenido, date: `${mensaje.fecha.getFullYear()}-${mensaje.fecha.getMonth()}-${mensaje.fecha.getDate()}   ` , time: mensaje.hora });
               });
             });
           }
@@ -139,8 +142,67 @@ io.use((socket, next) => {
         socket.emit("connected");
       });
     });
+    
+    socket.on("joinAdministrator", (documentAdministrator, salaCode) => {
+      console.log(`${documentAdministrator} joined the chat with socketId ${socket.id}`);
+      users[socket.id] = documentAdministrator;
   
-    socket.on("connectedwhithlocalstorage", (salaCode) => {
+      // Verificar si la sala existe
+      SalaChat.findOne({ codigoSalaChat: salaCode }, (err, sala) => {
+        if (sala===null) {
+          console.error("Error al buscar la sala en la base de datos:", err);
+          socket.emit("CodigoInvalido")
+          return;
+        }
+        if(sala.estadoSalaChat === false) {
+          console.log("La sala está cerrada:", salaCode);
+          socket.emit("roomClosed");
+          return;
+        }
+        if(sala.cliente !== documentAdministrator){
+          console.log("El administrador no es el cliente de la sala:", documentAdministrator);
+          socket.emit("adminNotClient");
+          return;
+        }
+
+        Persona.findOne({ nombre: "Administrator", codigoSala: salaCode }, (err, persona) => {
+          if (persona) {
+            console.log("Usuario ya existe en la sala:", documentAdministrator);
+            socket.emit("AdminAlreadyExists");
+          }
+        })
+
+        const persona = new Persona({
+          nombre: "Administrator",
+          codigoSala: salaCode,
+          permiso: true, 
+          idCliente: true // Es el administrador
+        });
+        persona.save(err => {
+          if (err) {
+            console.error("Error creating Persona:", err);
+          } else {
+            console.log('Persona created successfully:', persona);
+  
+            // Enviar todos los mensajes asociados a esta sala al nuevo usuario
+            Mensaje.find({ salaChat: salaCode }, (err, mensajes) => {
+              if (err) {
+                console.error("Error al buscar mensajes de la sala:", err);
+                return;
+              }
+              // Enviar cada mensaje al usuario recién conectado
+              mensajes.forEach(mensaje => {
+                socket.emit("messagePush", { user: mensaje.nombre, message: mensaje.contenido, date: `${mensaje.fecha.getFullYear()}-${mensaje.fecha.getMonth()}-${mensaje.fecha.getDate()}   ` , time: mensaje.hora });
+              });
+            });
+          }
+        });
+        socket.emit("connectedAdministrator");
+      });
+    });
+
+
+    socket.on("connectedwhithlocalstorage", (salaCode, username) => {
       Mensaje.find({ salaChat: salaCode }, (err, mensajes) => {
         if (err) {
           console.error("Error al buscar mensajes de la sala:", err);
@@ -148,8 +210,88 @@ io.use((socket, next) => {
         }
         // Enviar cada mensaje al usuario recién conectado
         mensajes.forEach(mensaje => {
-          socket.emit("message", { user: mensaje.nombre, message: mensaje.contenido });
+          socket.emit("messagePush", { user: mensaje.nombre, message: mensaje.contenido, date: `${mensaje.fecha.getFullYear()}-${mensaje.fecha.getMonth()}-${mensaje.fecha.getDate()}   ` , time: mensaje.hora });
         });
+      });
+      if(username === "Administrator"){
+        socket.emit("connectedAdministratorWhithLocalStorage");
+      }
+    })
+
+    socket.on("EliminarUsuario", (username, roomCode) => {
+      Persona.findOneAndDelete({ nombre: username, codigoSala: roomCode }, (err, persona) => {
+        if (err) {
+          console.error("Error al buscar persona en la sala:", err);
+          return;
+        }
+        if (persona){
+          console.log("Usuario eliminado de la sala:", username);
+          socket.emit("UsuarioEliminado", username)
+        }
+      });
+    })
+
+
+
+    socket.on("ActivarPermisos", (username, roomCode) =>{
+      Persona.findOne({ nombre: username, codigoSala: roomCode }, (err, persona) => {
+        if (err) {
+          console.error("Error al buscar persona en la sala:", err);
+          return;
+        }
+        if (persona){
+          persona.permiso = true;
+          persona.save(err => {
+            if (err) {
+              console.error("Error al activar los permisos:", err);
+              return;
+            }
+            console.log("Permisos activados para el usuario:", username);
+            socket.emit("permisosActivados", username)
+          });
+        }
+      });
+    })
+
+
+    socket.on("DesactivarPermisos", (username, roomCode) =>{
+      Persona.findOne({ nombre: username, codigoSala: roomCode }, (err, persona) => {
+        if (err) {
+          console.error("Error al buscar persona en la sala:", err);
+          return;
+        }
+        if (persona){
+          persona.permiso = false;
+          persona.save(err => {
+            if (err) {
+              console.error("Error al desactivar los permisos:", err);
+              return;
+            }
+            console.log("Permisos desactivados para el usuario:", username);
+            socket.emit("permisosDesactivados", username)
+          });
+        }
+      });
+    }
+    )
+
+
+    socket.on("GetUsers", (salaCode) => {
+      Persona.find({ codigoSala: salaCode }, (err, personas) => {
+        if (err) {
+          console.error("Error al buscar personas en la sala:", err);
+          return;
+        }
+        
+        const users = personas.map(persona => persona.nombre);
+        let lista = []
+        for (const [id, username] of Object.entries(users)) {
+          if(username !== "Administrator"){
+          lista.push(username)
+          }
+        }
+        console.log("Lista de usuarios en la sala:", lista);
+        socket.emit("HereAreTheusers", lista);
       });
     })
 
@@ -180,7 +322,8 @@ io.use((socket, next) => {
                 console.error("Error al buscar el mensaje en la base de datos:", err);
                 return;
               }
-              let date = mensaje.fecha;
+              console.log(mensaje+"gola");
+              let date = "gola";
               let time = mensaje.hora;
               // Enviar el mensaje a todos los usuarios en la misma sala
               io.emit("message", { user, message: data.message, date, time});
@@ -194,7 +337,9 @@ io.use((socket, next) => {
       })
       
     });
-  
+
+
+
    // Manejar los mensajes privados
    socket.on("privateMessage", (data) => {
     const user = users[socket.id] || "User";
@@ -241,6 +386,9 @@ io.use((socket, next) => {
   }  
 );
   
+  
+
+
   const PORT = process.env.PORT || 3010;
   server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
