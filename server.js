@@ -35,7 +35,8 @@ const personaSchema = new mongoose.Schema({
     fechaIngreso: { type: Date, default: Date.now },
     permiso: Boolean,
     codigoSala: String,
-    idCliente: Boolean
+    idCliente: Boolean,
+    socketId: String
   });
   
   const Persona = mongoose.model('Persona', personaSchema);
@@ -85,13 +86,30 @@ io.use((socket, next) => {
   
   // Manejar la conexión de los usuarios al servidor
   io.on("connection", (socket) => {
-    console.log("An user connected");
-  
+    console.log("New user connected:", socket.id);
+    socket.on("asignarSocketId", (socketId, roomCode, nombre) => {
+    Persona.findOne({ nombre: nombre, codigoSala: roomCode }, (err, persona) => {
+      if (persona) {
+        console.log("Actualizando el socketId:", socket.id);
+        persona.socketId = socket.id;
+        persona.save(err => {
+          if (err) {
+            console.error("Error al asignar el socketId:", err);
+            return;
+          }
+          console.log("SocketId asignado:", socket.id);
+          socket.emit("cambiarSocketIdEnLocalStorage", socket.id)
+        });
+    }
+    })
+    })
+
     // Permitir que el usuario se una al chat si el código de sala es válido
     socket.on("join", (username, salaCode) => {
       //Comprueba si hay un socketId en el local storage
       console.log(`${username} joined the chat with socketId ${socket.id}`);
       users[socket.id] = username;
+      console.log(users[socket.id]+  "Este es el usuario");
   
       // Verificar si la sala existe
       SalaChat.findOne({ codigoSalaChat: salaCode }, (err, sala) => {
@@ -118,7 +136,8 @@ io.use((socket, next) => {
           nombre: username,
           codigoSala: salaCode,
           permiso: true, // Puedes cambiar este valor según tus necesidades
-          idCliente: false // Por defecto, no es el administrador
+          idCliente: false, // Por defecto, no es el administrador
+          socketId: socket.id
         });
         persona.save(err => {
           if (err) {
@@ -143,9 +162,26 @@ io.use((socket, next) => {
       });
     });
     
+    socket.on("buscandoUsuario", (username, salaCode) => {
+      Persona.findOne({ nombre: username, codigoSala: salaCode }, (err, persona) => {
+        if (!persona) {
+          console.log("Usuario no encontrado en la sala:", username);
+          socket.emit("UsuarioNoEncontrado");
+        }
+      });
+    })
+
+    socket.on("addUser", (username , socketId) => {
+      users[socketId] = username;
+      console.log("Usuarios: "+users[socketId]);
+      socket.id = socketId;
+    })
+
+
     socket.on("joinAdministrator", (documentAdministrator, salaCode) => {
       console.log(`${documentAdministrator} joined the chat with socketId ${socket.id}`);
       users[socket.id] = documentAdministrator;
+      console.log(users[socket.id]+  "Este es el usuario");
   
       // Verificar si la sala existe
       SalaChat.findOne({ codigoSalaChat: salaCode }, (err, sala) => {
@@ -176,7 +212,8 @@ io.use((socket, next) => {
           nombre: "Administrator",
           codigoSala: salaCode,
           permiso: true, 
-          idCliente: true // Es el administrador
+          idCliente: true, // Es el administrador
+          socketId: socket.id
         });
         persona.save(err => {
           if (err) {
@@ -202,7 +239,7 @@ io.use((socket, next) => {
     });
 
 
-    socket.on("connectedwhithlocalstorage", (salaCode, username) => {
+    socket.on("connectedwhithlocalstorage", (salaCode, username, socketId) => {
       Mensaje.find({ salaChat: salaCode }, (err, mensajes) => {
         if (err) {
           console.error("Error al buscar mensajes de la sala:", err);
@@ -342,8 +379,7 @@ io.use((socket, next) => {
 
    // Manejar los mensajes privados
    socket.on("privateMessage", (data) => {
-    const user = users[socket.id] || "User";
-    const senderName = user;
+    const senderName = data.sender;
   
     // Verificar si el remitente está en la misma salaChat
     Persona.findOne({ nombre: senderName, codigoSala: data.salaCode }, (err, sender) => {
@@ -352,6 +388,7 @@ io.use((socket, next) => {
         return;
       }
   
+      
       // Verificar si el destinatario está en la misma salaChat
       Persona.findOne({ nombre: data.recipient, codigoSala: data.salaCode }, (err, recipient) => {
         if (err || !recipient) {
@@ -360,12 +397,12 @@ io.use((socket, next) => {
           return;
         }
         // Obtener el socketId de la Persona
-        const socketId = Object.keys(io.sockets.sockets[id].handshake.query.nombre === data.recipient);
+        const socketId = recipient.socketId
         if (socketId) {
           // Enviar el mensaje privado al destinatario
           io.to(socketId).emit("privateMessage", {
             user: senderName,
-            recipient: socketId,
+            recipient: data.recipient,
             message: data.message,
           });
         } else {

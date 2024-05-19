@@ -68,8 +68,6 @@
 </head>
 <body>
 
-  <!-- Contenedor de la lista de usuarios -->
-
 
   <!-- Formulario para ingresar el código de la sala -->
   <div id="roomCodeForm">
@@ -134,9 +132,14 @@
 
     document.addEventListener("DOMContentLoaded", function() {
       if(localStorage.getItem("roomCode") && localStorage.getItem("socketId")){
+        let nombre = localStorage.getItem("username");
+        let roomCode = localStorage.getItem("roomCode");
+        let socketId = localStorage.getItem("socketId");
         socket.io.opts.query = { codigoSala: localStorage.getItem("roomCode") };
         socket.connect()
-        socket.emit("connectedwhithlocalstorage", localStorage.getItem("roomCode"), localStorage.getItem("username"))
+        socket.emit("asignarSocketId", socketId, roomCode, nombre)
+        socket.emit("buscandoUsuario", nombre, roomCode);
+        socket.emit("connectedwhithlocalstorage", localStorage.getItem("roomCode"), localStorage.getItem("username"), localStorage.getItem("socketId"))
         document.getElementById("chatContainer").style.display = "block";
         document.getElementById("usernameFormContainer").style.display = "none";
         document.getElementById("roomCodeForm").style.display = "none";
@@ -144,6 +147,18 @@
       }
     });
     
+  socket.on("cambiarSocketIdEnLocalStorage", (socketId) => {
+    localStorage.setItem("socketId", socketId);
+  })
+
+  socket.on("UsuarioNoEncontrado", () =>{
+    alert("You are eliminated from the room")
+    localStorage.removeItem("roomCode");
+    localStorage.removeItem("username");
+    localStorage.removeItem("socketId");
+    location.reload();
+  })
+
   socket.on("CodigoInvalido", () => {
       alert("Código de sala inválido. Por favor, ingrese un código de sala válido");
       roomCodeInput.disabled = false;
@@ -203,6 +218,7 @@ socket.on("connectedAdministrator", () => {
           localStorage.setItem('socketId', socket.id);
           document.getElementById("userlistContainer").style.display = "block";
           document.getElementById("botonLogout").style.display = "block";
+          socket.emit("GetUsers", localStorage.getItem("roomCode"));
         });
 
 socket.on("connectedAdministratorWhithLocalStorage", () => {
@@ -261,6 +277,10 @@ socket.on("AdminAlreadyExists", () => {
           document.getElementById("usernameInput").disabled = false;
           document.getElementById("chatContainer").style.display = "none";
           document.getElementById("roomCodeForm").style.display = "block";
+          document.getElementById("userlistContainer").style.display = "none";
+          localStorage.removeItem("roomCode");
+          localStorage.removeItem("username");
+          localStorage.removeItem("socketId");
         });
 
 socket.on("adminNotClient", () => {
@@ -269,13 +289,15 @@ socket.on("adminNotClient", () => {
           document.getElementById("chatContainer").style.display = "none";
           document.getElementById("roomCodeForm").style.display = "block";
         });
+
     // Función para establecer el nombre de usuario
     function setUsername() {
       const usernameInput = document.getElementById("usernameInput");
       const username = usernameInput.value.trim();
+      console.log(username);
       const documentAdministratorInput = document.getElementById("documentAdministrator");
       const documentAdministrator = documentAdministratorInput.value.trim();
-      if (username !== "") {
+      if (username !== "" && username.toLowerCase() !== "administrator"){
         document.querySelector("#usernameChat").innerHTML = username;
         document.getElementById("usernameInput").disabled = true;
 
@@ -292,6 +314,9 @@ socket.on("adminNotClient", () => {
 
 
       } 
+
+      
+
       else if(documentAdministrator !== ""){
         document.querySelector("#usernameChat").innerHTML = "Administrator";
         document.getElementById("usernameInput").disabled = true;
@@ -306,6 +331,9 @@ socket.on("adminNotClient", () => {
         // Enviar el nombre de usuario y el código de sala al servidor
         socket.emit("joinAdministrator", documentAdministrator, roomCode);
 
+      }
+      else if(username.toLowerCase() == "administrator"){
+        alert("The username 'Administrator' is reserved. Please enter a different username.");
       }
       
       else {
@@ -370,10 +398,12 @@ function sendPrivateMessage() {
   const privateMessageInput = document.getElementById("privateMessageInput");
   const recipient = recipientInput.value.trim();
   const message = privateMessageInput.value.trim();
-  const salaCode = document.getElementById("roomCodeInput").value.trim(); // Obtener el código de la sala
+  const salaCode = localStorage.getItem("roomCode"); // Obtener el código de la sala
+  const socketId = localStorage.getItem("socketId");
+  const sender = localStorage.getItem("username");
   if (recipient && message && salaCode) {
     // Enviar el mensaje privado al servidor
-    socket.emit("privateMessage", { recipient, message, salaCode });
+    socket.emit("privateMessage", { recipient, message, salaCode, socketId, sender});
     displayPrivateMessage({ user: "You", recipient, message });
     privateMessageInput.value = "";
   } else {
@@ -402,6 +432,7 @@ function displayMessagePush(data) {
 
     // Función para mostrar un mensaje en el chat privado
     function displayPrivateMessage(data) {
+      // Agregamos esta línea para imprimir los datos recibidos en la consola
       const privateMessages = document.getElementById("privateMessages");
       const li = document.createElement("li");
       li.innerHTML = `<strong>${data.user} to ${data.recipient}:</strong> ${data.message}`;
