@@ -3,9 +3,9 @@
 <head>
   <title>Socket.io Chat</title>
   <style>
-    body {
+     body {
       font-family: Arial, sans-serif;
-      background-color: #f7f7f7;
+      background-color: #f3e8ff;
       margin: 0;
       padding: 0;
     }
@@ -31,38 +31,58 @@
     }
 
     button {
-      background-color: #4caf50;
+      background-color: #7a1ea1;
       color: #fff;
       border: none;
       cursor: pointer;
     }
 
     button:hover {
-      background-color: #45a049;
+      background-color: #67188a;
     }
 
-    #messages, #privateMessages {
+    #messages, #privateMessages, #userlist {
       list-style-type: none;
       padding: 0;
     }
 
-    #messages li, #privateMessages li {
+    #messages li, #privateMessages li, #userlist li {
       margin-bottom: 10px;
       padding: 10px;
       border-radius: 4px;
-      background-color: #f2f2f2;
+      background-color: #f2e1ff;
     }
 
-    #messages li strong, #privateMessages li strong {
-      color: #4caf50;
+    #messages li strong, #privateMessages li strong, #userlist li strong {
+      color: #7a1ea1;
     }
 
     #privateMessages li {
-      background-color: #d9edf7;
+      background-color: #e2d4ff;
     }
 
     #chatContainer h2 {
-      color: #4caf50;
+      color: #7a1ea1;
+    }
+
+    #userlistContainer {
+      display: none;
+      width: 400px;
+      margin: 20px auto;
+      background-color: #fff;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+
+    #userlistContainer ul {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    #userlistContainer button {
+      margin: 5px 0;
     }
   </style>
 </head>
@@ -119,7 +139,7 @@
   </div>
 
   
-  <div id="userlistContainer" style="display: none; margin-left: 37vw;">
+  <div id="userlistContainer" style="display: none; margin-left: 35.3vw;">
     <h2>Users List:</h2>
   </div>
 
