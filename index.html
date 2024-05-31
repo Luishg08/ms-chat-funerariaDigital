@@ -199,6 +199,11 @@
       document.getElementById("usernameInput").disabled = false;
   });
   
+  function showRoomCodeForm() {
+      document.getElementById("welcomeContainer").style.display = "none";
+      document.getElementById("roomCodeForm").style.display = "block";
+    }
+
     // Función para unirse al chat
   function joinChat() {
     document.getElementById("usernameFormContainer").style.display = "block";

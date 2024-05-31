@@ -401,7 +401,7 @@ io.use((socket, next) => {
           // Enviar el mensaje privado al destinatario
           io.to(socketId).emit("privateMessage", {
             user: senderName,
-            recipient: data.recipient,
+            recipient: socketId,
             message: data.message,
           });
         } else {
